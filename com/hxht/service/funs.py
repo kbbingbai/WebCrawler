@@ -8,22 +8,20 @@
      二： 功能函数都是写在这个文本里面
 
  难点
-
  注意点
 """
 
-import configparser, os, requests, json,re,time
+import configparser, os, requests, json,re,time,logging
 from bs4 import BeautifulSoup
 from operator import itemgetter
 from elasticsearch import helpers
-import string
 from urllib.request import *
 import http.cookiejar, urllib.parse
 
 from ReadConfig import ReadConfig
 
 
-def unsubscribeArticles(readerPanelListSorted) :
+def unsubscribeArticles(readerPanelListSorted,sess) :
     """
         取消文章的订阅
         :param readerPanelListSorted: 传入的list，格式是  [{id:文章的url},{id:文章的url},.....]
@@ -33,8 +31,6 @@ def unsubscribeArticles(readerPanelListSorted) :
 
     mainUrl = cf.get("main-url","main-url")
     url = mainUrl
-
-    headerJson = dict(cf.items("request-header"))
 
     articleIds = []
     for temp in readerPanelListSorted :
@@ -46,54 +42,11 @@ def unsubscribeArticles(readerPanelListSorted) :
         'xjxargs[]': articleIds
     }
 
-    requests.post(url, data=mydata, headers=headerJson)
-
-
-# def getKeyWord():
-#     """
-#         得到匹配的关键字并返回这样的形式,{"CommonKW":{"adware","Worm"...}....}
-#     """
-#     res = es.search(index="crawlerkeyword", body={'query': {'match_all': {}}},params={"size":500})
-#     newDict = {}
-#     for temp in res['hits']['hits']:
-#         typeValue = temp['_source']['type']
-#         valueValue = temp['_source']['value']
-#         if typeValue in newDict:
-#             newDict[typeValue].append(valueValue)
-#         else:
-#             subList = []
-#             subList.append(valueValue)
-#             newDict[typeValue]=subList
-#     return newDict
-
-
-
-# def articleContentRegularMatch(articlesLoadedListSorted):
-#     """
-#     对文章的内容进行正则的匹配，如果一篇文章的content，匹配了相关的关键字，就打相关的标签
-#     :param articlesLoadedListSorted:
-#     :return:
-#     """
-#     keyWordMap = getKeyWord()
-#
-#     for singleArticle in articlesLoadedListSorted:
-#         #取出文章的content
-#         articleContent = singleArticle["content"]
-#         tags = []
-#         for keyWord in keyWordMap:
-#             singleGroupListReg = "|".join(keyWordMap[keyWord])
-#             isMatch = re.findall(singleGroupListReg,articleContent) #是否匹配到
-#             if isMatch: #表示匹配了上
-#                 tags.append(keyWord)
-#         singleArticle.update({"tags":"|".join(tags)})
-
-
+    requests.post(url, data=mydata,cookies=sess.cookies)
 
 """
     ###################CrawlArticle####存的下需要的函数###############################################
 """
-
-
 def readConfig(config, section):
     """
         读取配置文件的信息
@@ -163,31 +116,32 @@ def updateCookieInfo():
     with open("../config/requestHeader.ini","w+") as f:
         config.cf.write(f)
 
-def getBuiltTreeJsonData():
-    """
-        返回 构建树的信息（订阅信息）
-        注意：返回的对象实际上是json信息，里面含有构建树的信息
-    """
+
+def getBuiltTreeJsonData(sess):
     cf = readConfig("requestHeader.ini", False)
     headerJson = dict(cf.items("request-header"))
-    mainUrl = cf.get("main-url", "main-url")
-    mydata = {
-        'xjxfun': 'build_tree'
+    loginUrl = cf.get("login-user-info", "url")
+    username = cf.get("login-user-info", "username")
+    password = cf.get("login-user-info", "password")
+    warp_action = cf.get("login-user-info", "warp_action")
+    remember_me = cf.get("login-user-info", "remember_me")
+    params = {
+        "username": username,
+        "password": password,
+        "warp_action": warp_action,
+        "remember_me": remember_me
     }
-    myheader = headerJson
-    myresponse = requests.post(mainUrl, data=mydata, headers=myheader)
-    if "Invalid function request received" in myresponse.text:   #如果出现了这种情况，这说明获取数据没有获取成功，就需要更新cookie信息
-        updateCookieInfo() #更新cookie信息，下面的代码是更新完cookie信息后再进行登陆
+    # 创建向登录页面发送POST请求的Request
+    sess.post(loginUrl, data=params, headers=headerJson)
 
-        cf = readConfig("requestHeader.ini", False)
-        headerJson = dict(cf.items("request-header"))
-        mainUrl = cf.get("main-url", "main-url")
-        mydata = {
-            'xjxfun': 'build_tree'
-        }
-        myheader = headerJson
-        myresponse = requests.post(mainUrl, data=mydata, headers=myheader)
+
+    mydata = {
+                'xjxfun': 'build_tree'
+            }
+    mainUrl = cf.get("main-url", "main-url")
+    myresponse = requests.post(mainUrl, data=mydata, cookies=sess.cookies)
     return myresponse
+
 
 def createArticleStoreLocalDir(articleStoreDir):
     """
@@ -214,19 +168,17 @@ def analyseTreeBuiltJsonData(builtTreeJson):
 
 
 
-def getPrintArticlesJsonData():
+def getPrintArticlesJsonData(sess):
     """
         返回 未读文章信息（订阅频道的未读文章）
         注意：返回的对象实际上是json信息，里面含有未读文章信息
     """
     cf = readConfig("requestHeader.ini", False)
-    headerJson = dict(cf.items("request-header"))
     mainUrl = cf.get("main-url", "main-url")
     mydata = {
         'xjxfun': 'print_articles'
     }
-    myheader = headerJson
-    myresponse = requests.post(mainUrl, data=mydata, headers=myheader)
+    myresponse = requests.post(mainUrl, data=mydata, cookies=sess.cookies)
     return myresponse
 
 def  analyseReaderPanel(printArticlesHtml) :
@@ -300,13 +252,13 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
     # 进行提交，批量插入数据，没有提交的话，无法完成插入
     mysqlConn.commit()
 
-def analyseNewArticles(articleStoreDir):
+def analyseNewArticles(articleStoreDir,sess):
     """
         查看是否有新的文章,如果有新文章就返回Ture，如果没有新的文章就返回False
         :param printArticleJson:
         :return:
     """
-    printArticleInfo = getPrintArticlesJsonData() #得到全部PrintArticles信息
+    printArticleInfo = getPrintArticlesJsonData(sess) #得到全部PrintArticles信息
     printArticleInfo = json.loads(printArticleInfo.content).get('xjxobj')
 
     readerPaneHtml = ''                           #得到{cmd: "as", id: "reader_pane", prop: "innerHTML",…} 这一项的信息
@@ -335,8 +287,6 @@ def analyseNewArticles(articleStoreDir):
        articlesLoadedListSorted[tempNum].update({"url":readerPanelListSorted[tempNum]['url']})
 
     return articlesLoadedListSorted
-
-
 
 """
     ###################AnalyseArticle####存的下需要的函数###############################################
@@ -450,3 +400,26 @@ def importDataToEs(esConn,articleListData,fetchAll,mysqlConn):
         usersvalues.append((-1, fetchAll[temp][0]))
     mysqlConn.cursor().executemany('update webcrawlerfilelist set articleflag =%s where id =%s', usersvalues)
     mysqlConn.commit()  # 没有提交的话，无法完成插入
+
+
+def createLog():
+    cf = readConfig("requestHeader.ini", False)
+    log_path = cf.get("logger", "loggerDir")
+    # 第一步，创建一个logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)  # Log等级总开关
+    # 第二步，创建一个handler，用于写入日志文件
+    rq = time.strftime('%Y%m', time.localtime(time.time()))
+    log_name = log_path + rq + '.log'
+    logfile = log_name
+    if not os.path.exists(log_path):
+        os.makedirs(log_path)
+    fh = logging.FileHandler(logfile, mode='a', encoding="utf-8")
+    fh.setLevel(logging.DEBUG)  # 输出到file的log等级的开关
+    # 第三步，定义handler的输出格式
+    formatter = logging.Formatter("%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s")
+    fh.setFormatter(formatter)
+    # 第四步，将logger添加到handler里面
+    logger.addHandler(fh)
+
+    return logger
