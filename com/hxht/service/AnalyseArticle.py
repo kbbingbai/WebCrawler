@@ -10,19 +10,24 @@
  注意点
     
 """
+from ReadConfig import ReadConfig
 from funs import *
 
 if __name__ == "__main__" :
+
+
     # log对象
     logger = createLog()
+    logger.info("=====AnalyseArticle开始=====")
+
     # 配置对象
     config = ReadConfig()
     # 得到es的连接对象
     esConn = config.buildEsConnection()
 
     #准备es索引
-    indexPrefix = config.getValueByKey("es_index","index_prefix")
-    es_type = config.getValueByKey("es_index", "type")
+    indexPrefix = config.getValueByKey("es","index_prefix")
+    es_type = config.getValueByKey("es", "type")
     currentDate = time.strftime('%Y-%m-%d', time.localtime(time.time()));
     es_index = indexPrefix+currentDate
 
@@ -48,6 +53,7 @@ if __name__ == "__main__" :
     mysqlConn.close()
 
     logger.info("=====AnalyseArticle结束=====")
+
 
 
 

@@ -10,28 +10,17 @@
  难点
  注意点
 """
-
 import configparser, os, requests, json,re,time,logging
 from bs4 import BeautifulSoup
 from operator import itemgetter
 from elasticsearch import helpers
-from urllib.request import *
-import http.cookiejar, urllib.parse
 
-from ReadConfig import ReadConfig
-
-
-def unsubscribeArticles(readerPanelListSorted,sess) :
+def unsubscribeArticles(readerPanelListSorted,sess,websiteurl) :
     """
         取消文章的订阅
         :param readerPanelListSorted: 传入的list，格式是  [{id:文章的url},{id:文章的url},.....]
         :return:
     """
-    cf = readConfig("requestHeader.ini", False)
-
-    mainUrl = cf.get("main-url","main-url")
-    url = mainUrl
-
     articleIds = []
     for temp in readerPanelListSorted :
         articleIds.append(temp["id"])
@@ -42,7 +31,7 @@ def unsubscribeArticles(readerPanelListSorted,sess) :
         'xjxargs[]': articleIds
     }
 
-    requests.post(url, data=mydata,cookies=sess.cookies)
+    requests.post(websiteurl, data=mydata,cookies=sess.cookies)
 
 """
     ###################CrawlArticle####存的下需要的函数###############################################
@@ -69,60 +58,15 @@ def readConfig(config, section):
     else:
         return cf
 
-def updateCookieInfo():
-    """"
-        更新cookie信息
-    """
-    # # 以指定文件创建CookieJar对象，对象将可以把cookie保存在文件中
-    cookie_jar = http.cookiejar.MozillaCookieJar('../config/cookie.txt')
-    # # 创建HTTPCookieProcessor对象
-    cookie_processor = HTTPCookieProcessor(cookie_jar)
-    # # 创建OpenerDirector对象
-    opener = build_opener(cookie_processor)
-    # 创建一个配置对象
-    config = ReadConfig()
-    # 定义模拟Chrome浏览器的user_agent
-    user_agent = config.getValueByKey("login-user-info","user-agent")
-
-    # 定义请求头
-    headers = {'User-Agent': user_agent, 'Connection': 'keep-alive'}
-    # 定义请求参数
-    username = config.getValueByKey("login-user-info", "username")
-    password = config.getValueByKey("login-user-info", "password")
-    warp_action = config.getValueByKey("login-user-info", "warp_action")
-    remember_me = config.getValueByKey("login-user-info", "remember_me")
-    loginUrl = config.getValueByKey("login-user-info", "url")
-    params = {
-        "username": username,
-        "password": password,
-        "warp_action": warp_action,
-        "remember_me": remember_me
-    }
-    postdata = urllib.parse.urlencode(params).encode()
-    # 创建向登录页面发送POST请求的Request
-    request = Request(loginUrl,data = postdata, headers = headers)
-    # 使用OpenerDirector发送POST请求
-    response = opener.open(request)
-    # 将cookie信息写入磁盘文件
-    cookie_jar.save(ignore_discard=True, ignore_expires=True)
-    cookie_jar.load("../config/cookie.txt",ignore_discard=True,ignore_expires=True)
-
-    cookieInfo = ""
-    for item in cookie_jar:
-        cookieInfo += item.name+"="+item.value+";"
-
-    config.cf.set("request-header","cookie",cookieInfo)
-
-    with open("../config/requestHeader.ini","w+") as f:
-        config.cf.write(f)
-
-
-def getBuiltTreeJsonData(sess):
+def getBuiltTreeJsonData(sess,username,password,websiteurl):
     cf = readConfig("requestHeader.ini", False)
-    headerJson = dict(cf.items("request-header"))
-    loginUrl = cf.get("login-user-info", "url")
-    username = cf.get("login-user-info", "username")
-    password = cf.get("login-user-info", "password")
+    headerJson = {
+        "referer":"https://www.inoreader.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36"
+    }
+
+    loginUrl = "https://www.inoreader.com/login"
+
     warp_action = cf.get("login-user-info", "warp_action")
     remember_me = cf.get("login-user-info", "remember_me")
     params = {
@@ -137,8 +81,8 @@ def getBuiltTreeJsonData(sess):
     mydata = {
                 'xjxfun': 'build_tree'
             }
-    mainUrl = cf.get("main-url", "main-url")
-    myresponse = requests.post(mainUrl, data=mydata, cookies=sess.cookies)
+
+    myresponse = requests.post(websiteurl, data=mydata, cookies=sess.cookies)
     return myresponse
 
 
@@ -152,7 +96,7 @@ def createArticleStoreLocalDir(articleStoreDir):
     localDir = articleStoreLocalDir+articleStoreDir+"/"
     if not os.path.exists(localDir):
         os.makedirs(localDir)
-    return localDir;
+    return localDir
 
 def analyseTreeBuiltJsonData(builtTreeJson):
     """
@@ -167,17 +111,16 @@ def analyseTreeBuiltJsonData(builtTreeJson):
 
 
 
-def getPrintArticlesJsonData(sess):
+def getPrintArticlesJsonData(sess,websiteurl):
     """
         返回 未读文章信息（订阅频道的未读文章）
         注意：返回的对象实际上是json信息，里面含有未读文章信息
     """
     cf = readConfig("requestHeader.ini", False)
-    mainUrl = cf.get("main-url", "main-url")
     mydata = {
         'xjxfun': 'print_articles'
     }
-    myresponse = requests.post(mainUrl, data=mydata, cookies=sess.cookies)
+    myresponse = requests.post(websiteurl, data=mydata, cookies=sess.cookies)
     return myresponse
 
 def  analyseReaderPanel(printArticlesHtml) :
@@ -185,9 +128,7 @@ def  analyseReaderPanel(printArticlesHtml) :
         得到文章的url信息和文章的id,把它组成一个list,组成一个[{id:文章的url},{id:文章的url},.....]的形式
         :return:
     """
-    articleUrlPrefixItem = readConfig("requestHeader.ini", 'article-url-prefix')
-    articleUrlPrefix = articleUrlPrefixItem.get("article-url-prefix")#文章url的前缀  比如一个文章的url是 https://www.inoreader.com/article/3a9c6e7972bfb2cf-  那articleUrlPrefix就是https://www.inoreader.com/article/
-
+    articleUrlPrefix = "https://www.inoreader.com/article/"
     soup = BeautifulSoup(printArticlesHtml, 'lxml')
     readerPanels = soup.select('div[data-oid]')
 
@@ -224,17 +165,6 @@ def storeFileToLocal(articlesLoadedListSorted,articleStoreLocalDir):
         f = open(articleStoreLocalDir + id + ".html", "w", encoding="utf-8")
         f.write(str(htmltext))
 
-# def storeFileToMysql(articles24LoadedListSorted,articleStoreLocalDir,mysqlConn):
-        """
-           把数据插入到mysql数据库中，这个是方法没有验证数据的重复性
-        """
-#     cur = mysqlConn.cursor();
-#     usersvalues = []
-#     for temp in articles24LoadedListSorted:
-#         usersvalues.append((temp['url'],articleStoreLocalDir+temp['id']+".html"))
-#     # 批量插入数据
-#     cur.executemany('insert into webcrawlerfilelist(articleurl,articledir) value(%s,%s)', usersvalues)
-#     mysqlConn.commit()#没有提交的话，无法完成插入
 
 def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocalDir,mysqlConn):
     """
@@ -251,13 +181,13 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
     # 进行提交，批量插入数据，没有提交的话，无法完成插入
     mysqlConn.commit()
 
-def analyseNewArticles(articleStoreDir,sess):
+def analyseNewArticles(articleStoreDir,sess,websiteurl):
     """
         查看是否有新的文章,如果有新文章就返回Ture，如果没有新的文章就返回False
         :param printArticleJson:
         :return:
     """
-    printArticleInfo = getPrintArticlesJsonData(sess) #得到全部PrintArticles信息
+    printArticleInfo = getPrintArticlesJsonData(sess,websiteurl) #得到全部PrintArticles信息
     printArticleInfo = json.loads(printArticleInfo.content).get('xjxobj')
 
     readerPaneHtml = ''                           #得到{cmd: "as", id: "reader_pane", prop: "innerHTML",…} 这一项的信息
@@ -422,5 +352,32 @@ def createLog():
     fh.setFormatter(formatter)
     # 第四步，将logger添加到handler里面
     logger.addHandler(fh)
-
     return logger
+
+
+def queryUsers(mysqlConn):
+    """
+    取出用户名与密码
+    :param mysqlConn: mysql连接
+    :return:
+    """
+    cur = mysqlConn.cursor();
+    querySql = "select username,password from webcrawlerusers"
+    cur.execute(querySql)
+    results = cur.fetchall()
+    return results
+
+def queryWebsiteurl(mysqlConn):
+    """
+    获取站点的名称
+    :param mysqlConn: mysql连接
+    :return:
+    """
+    cur = mysqlConn.cursor();
+    querySql = "select websiteurl from webcrawlersite"
+    cur.execute(querySql)
+    results = cur.fetchone()
+    if len(results)==1:
+        return results[0]
+    else:
+        return ""
