@@ -6,3 +6,7 @@
 
 headers = { 'Connection': 'close',}
 r = requests.get(url, headers=headers)
+
+--------------------------
+
+查询索引存在不存在

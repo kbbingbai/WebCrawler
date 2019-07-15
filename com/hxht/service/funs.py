@@ -134,7 +134,6 @@ def getBuiltTreeJsonData(sess):
     # 创建向登录页面发送POST请求的Request
     sess.post(loginUrl, data=params, headers=headerJson)
 
-
     mydata = {
                 'xjxfun': 'build_tree'
             }
@@ -316,7 +315,7 @@ def queryAnalyseData(mysqlConn):
     cursor = mysqlConn.cursor()
 
     # SQL 查询语句
-    sql = "select id,articleurl,articledir,updatetime from webcrawlerfilelist where articleflag=-3"
+    sql = "select id,articleurl,articledir,updatedate from webcrawlerfilelist where articleflag=-3"
     usersvalues = []
     try:
        # 执行SQL语句
@@ -334,10 +333,12 @@ def queryAnalyseData(mysqlConn):
     return results
 
 def analyseSingleArticleAuthor(soup):
-    author = soup.find("span", attrs={"class": "article_author"}).text
-    author = author.replace(" ", "").replace("\n", "").replace("\t", "")
+    textauthor = soup.find("span", attrs={"class": "article_author"}).text
+    textauthor = textauthor.replace(" ", "").replace("\n", "").replace("\t", "")
 
-    author = re.findall(r"(.*)由(.*)新增规则", author)
+    author = re.findall(r"(.*)由(.*)新增规则", textauthor)
+    if len(author) ==0:
+        author = re.findall(r"(.*)by(.*)Createrule", textauthor)
     if author:
         author = author[0][1]
     else:
@@ -377,16 +378,16 @@ def analyseSingleArticle(articledir,articleurl,id,insertTime):
     #解析作者
     author = analyseSingleArticleAuthor(soup)
 
-    singleMap = {"id": id, "title": title,"author": author,"url": articleurl,"articledir": articledir,"publicDate": publicDate,"insertDate": insertTime,
+    singleMap = {"title": title,"author": author,"url": articleurl,"articledir": articledir,"publicDate": publicDate,"insertDate": insertTime,
                  "analyseFlag": "false","content": content}
 
     return singleMap
 
-def importDataToEs(esConn,articleListData,fetchAll,mysqlConn):
+def importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type):
     actions = [
         {
-            "_index": "crawler_index",
-            "_type": "crawler_type",
+            "_index": es_index,
+            "_type": es_type,
             '_source': d
         }
         for d in articleListData

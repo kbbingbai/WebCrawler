@@ -13,10 +13,19 @@
 from funs import *
 
 if __name__ == "__main__" :
+    # log对象
     logger = createLog()
+    # 配置对象
     config = ReadConfig()
     # 得到es的连接对象
     esConn = config.buildEsConnection()
+
+    #准备es索引
+    indexPrefix = config.getValueByKey("es_index","index_prefix")
+    es_type = config.getValueByKey("es_index", "type")
+    currentDate = time.strftime('%Y-%m-%d', time.localtime(time.time()));
+    es_index = indexPrefix+currentDate
+
     logger.info("=====连接elasticsearch成功=====")
     # 得到mysql的连接对象
     mysqlConn = config.buildMysqlConnection()
@@ -33,7 +42,7 @@ if __name__ == "__main__" :
 
     logger.info("=====录入到es格式化后的数据=====")
     #入es数据
-    importDataToEs(esConn,articleListData,fetchAll,mysqlConn)
+    importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type)
 
     #关闭相应的连接
     mysqlConn.close()
