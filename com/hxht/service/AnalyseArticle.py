@@ -28,7 +28,7 @@ if __name__ == "__main__" :
     #准备es索引
     indexPrefix = config.getValueByKey("es","index_prefix")
     es_type = config.getValueByKey("es", "type")
-    currentDate = time.strftime('%Y-%m-%d', time.localtime(time.time()));
+    currentDate = time.strftime('%Y%m%d', time.localtime(time.time()));
     es_index = indexPrefix+currentDate
 
     logger.info("=====连接elasticsearch成功=====")
