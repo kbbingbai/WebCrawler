@@ -6,11 +6,10 @@
  作用
      一： 辅助工具类，
      二： 功能函数都是写在这个文本里面
-
  难点
  注意点
 """
-import configparser, os, requests, json,re,time,logging
+import configparser, os, requests, json,re,time,logging,datetime,shutil
 from bs4 import BeautifulSoup
 from operator import itemgetter
 from elasticsearch import helpers
@@ -61,11 +60,11 @@ def readConfig(config, section):
 def getBuiltTreeJsonData(sess,username,password,websiteurl):
     cf = readConfig("requestHeader.ini", False)
     headerJson = {
-        "referer":"https://www.inoreader.com/",
+        "referer":str(websiteurl)+"/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36"
     }
 
-    loginUrl = "https://www.inoreader.com/login"
+    loginUrl = str(websiteurl)+"/login"
 
     warp_action = cf.get("login-user-info", "warp_action")
     remember_me = cf.get("login-user-info", "remember_me")
@@ -123,12 +122,12 @@ def getPrintArticlesJsonData(sess,websiteurl):
     myresponse = requests.post(websiteurl, data=mydata, cookies=sess.cookies)
     return myresponse
 
-def  analyseReaderPanel(printArticlesHtml) :
+def  analyseReaderPanel(printArticlesHtml,websiteurl) :
     """
         得到文章的url信息和文章的id,把它组成一个list,组成一个[{id:文章的url},{id:文章的url},.....]的形式
         :return:
     """
-    articleUrlPrefix = "https://www.inoreader.com/article/"
+    articleUrlPrefix = str(websiteurl)+"/article/"
     soup = BeautifulSoup(printArticlesHtml, 'lxml')
     readerPanels = soup.select('div[data-oid]')
 
@@ -206,7 +205,7 @@ def analyseNewArticles(articleStoreDir,sess,websiteurl):
             if 'as' == printArticleInfo[tempNum]['cmd'] and 'reader_pane' == printArticleInfo[tempNum]['id'] :
                 readerPaneHtml = printArticleInfo[tempNum]['data']
 
-    readerPanelList = analyseReaderPanel(readerPaneHtml) #返回[{id:文章的url},{id:文章的url},.....]的形式
+    readerPanelList = analyseReaderPanel(readerPaneHtml,websiteurl) #返回[{id:文章的url},{id:文章的url},.....]的形式
     articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml) #返回[{"id":id的值，"htmltext":"文章html的内容"}, {"id":id的值，"htmltext":"文章html的内容"},.....]的形式
 
     readerPanelListSorted = sorted(readerPanelList, key=itemgetter('id'), reverse=True)
@@ -357,27 +356,36 @@ def createLog():
 
 def queryUsers(mysqlConn):
     """
-    取出用户名与密码
+    获取所有的用户
     :param mysqlConn: mysql连接
     :return:
     """
     cur = mysqlConn.cursor();
-    querySql = "select username,password from webcrawlerusers"
+    querySql = "select username,password,websiteurl,websitename from webcrawlerusers"
     cur.execute(querySql)
     results = cur.fetchall()
     return results
 
-def queryWebsiteurl(mysqlConn):
+def deleteMysqlArticle(mysqlConn):
     """
-    获取站点的名称
-    :param mysqlConn: mysql连接
+    每天删除mysql三天前已经成功的数据
+    :param mysqlConn:
     :return:
     """
     cur = mysqlConn.cursor();
-    querySql = "select websiteurl from webcrawlersite"
-    cur.execute(querySql)
-    results = cur.fetchone()
-    if len(results)==1:
-        return results[0]
-    else:
-        return ""
+    beforeThreeDay = datetime.date.today() + datetime.timedelta(-2)
+    sql = 'delete from webcrawlerfilelist where updatedate < STR_TO_DATE(%s,%s) and articleflag = %s'
+    cur.execute(sql,[beforeThreeDay,'%Y-%m-%d',-1])
+    mysqlConn.commit()
+
+def deleteLocalDirArticle():
+    """
+    每天删除本地存储文件当中三天前数据
+    :return:
+    """
+    beforeThreeDay = datetime.date.today() + datetime.timedelta(-3)
+    cf = readConfig("requestHeader.ini", False)
+    localFileDir = cf.get("article-storelocaldir", "articlestorelocaldir")
+    removeDir = localFileDir+str(beforeThreeDay)
+    if os.path.exists(removeDir):
+        shutil.rmtree(removeDir)
