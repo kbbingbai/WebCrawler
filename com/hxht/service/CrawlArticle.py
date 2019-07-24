@@ -59,12 +59,12 @@ if __name__ == "__main__":
             treeBuiltJsonDataRes = getBuiltTreeJsonData(sess,user[0],user[1],user[2])
             isSubscribe = analyseTreeBuiltJsonData(treeBuiltJsonDataRes)
 
-            if isSubscribe == True : ## 订阅了频道，但是有可能订阅了频道但是没有新的文章，也有可能订阅了频道有新的文章
+            if isSubscribe == True : # 订阅了频道，但是有可能订阅了频道但是没有新的文章，也有可能订阅了频道有新的文章
                 #得到24篇文章[{字段：字段值}]
                 articles24LoadedListSorted = analyseNewArticles(articleStoreDir,sess,user[2])
                 while articles24LoadedListSorted :
                     logger.info("=====得到了%d篇文章=====",len(articles24LoadedListSorted))
-                    # 把文章去保存到本地目录
+                    # 把文章保存到本地目录
                     storeFileToLocal(articles24LoadedListSorted, articleStoreLocalDir)
                     # 把文章放在mysql里面
                     storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocalDir,mysqlConn)
@@ -75,7 +75,6 @@ if __name__ == "__main__":
 
             sess.close()
             logger.info("=====用户名为：%s 结束抓取文章=====", user[0])
-
     #关闭数据库的连接
     mysqlConn.close()
     logger.info("=====CrawlArticle结束=====")

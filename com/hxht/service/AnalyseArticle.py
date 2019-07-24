@@ -35,7 +35,6 @@ if __name__ == "__main__" :
     # 得到mysql的连接对象
     mysqlConn = config.buildMysqlConnection()
     logger.info("=====连接mysql成功=====")
-    batchersize = config.getValueByKey("analysearticle-batchsize","batchersize") #这个是一次处理文章的个数，如果有必要我们可以设置
 
     logger.info("=====开始从mysql数据库中查询待处理的数据=====")
     #从数据库中查询待处理的数据

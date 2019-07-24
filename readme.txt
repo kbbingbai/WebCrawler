@@ -19,3 +19,9 @@ r = requests.get(url, headers=headers)
 
 在Commits on Jul 19, 2019以后的程序是修改围绕这个问题进行的修改。
 ----------------------------
+有的网站爬取不下来，用这个header是可以的
+ headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.137 Safari/537.36 LBBROWSER'
+        }
+ response = requests.get(results[temp][0],timeout=10, headers=headers)
+ ------------------------------

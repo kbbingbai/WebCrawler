@@ -11,8 +11,8 @@
 """
 import configparser, os, requests, json,re,time,logging,datetime,shutil
 from bs4 import BeautifulSoup
-from operator import itemgetter
 from elasticsearch import helpers
+import uuid
 
 def unsubscribeArticles(readerPanelListSorted,sess,websiteurl) :
     """
@@ -23,7 +23,6 @@ def unsubscribeArticles(readerPanelListSorted,sess,websiteurl) :
     articleIds = []
     for temp in readerPanelListSorted :
         articleIds.append(temp["id"])
-
     articleIds = "[\"" + "\",\"".join(articleIds) + "\"]"
     mydata = {
         'xjxfun': 'read_article',
@@ -147,22 +146,36 @@ def analyseArticlesLoaded(articlesLoadedHtml) :
     """
     listTotal = []
     articleContent = articlesLoadedHtml[0]
-    for temp in articleContent.items():  # 转成元组, temp的组成是这样的，('20563836790', 'elementHtml')
-        #文章的id
+    for temp in articleContent.items():
         id = temp[0]
         htmltext = temp[1]
-        singleMap = {"id": id, "htmltext":htmltext}
+        soup = BeautifulSoup(htmltext, 'lxml')
+        articleUrl = soup.find("div", attrs={"class": "header_buttons"}).find("a")["href"]
+        articleTitle = soup.select(".article_title_link")[0].text.strip()
+        articlePublicDate = analyseSingleArticlePublicDate(soup)
+        articleAuthor = analyseSingleArticleAuthor(soup)
+        articleId = str(uuid.uuid1())
+        singleMap = {
+            "articleUrl":articleUrl,
+            "articleTitle":articleTitle,
+            "articlePublicDate":articlePublicDate,
+            "articleAuthor":articleAuthor,
+            "articleId":articleId,
+            "id":id
+        }
         listTotal.append(singleMap)
     return listTotal
 
+
 def storeFileToLocal(articlesLoadedListSorted,articleStoreLocalDir):
-    # 把文章列表存入本地
+    # 把每篇文章写入本地目录文件
     for temp in articlesLoadedListSorted:
-        htmltext = temp['htmltext']
-        url = temp['url']
-        id = temp['id']
-        f = open(articleStoreLocalDir + id + ".html", "w", encoding="utf-8")
-        f.write(str(htmltext))
+        if "articleContent" in temp: #判断本篇文章是否取到了内容，如果没有取得内容，就不存入本地目录
+            articleContent = temp['articleContent']
+            articleId = temp['articleId']
+            f = open(articleStoreLocalDir + articleId + ".html", "w", encoding="utf-8")
+            f.write(str(articleContent))
+            f.close()
 
 
 def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocalDir,mysqlConn):
@@ -170,51 +183,43 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
         把数据插入到mysql数据库中，这个是方法验证了数据的重复性
     """
     cur = mysqlConn.cursor();
-    insertSql = "insert into webcrawlerfilelist(articleurl,articledir) values(%s,%s)"
+    insertSql = "insert into webcrawlerfilelist(id,articleurl,articledir,articletitle,articleauthor,publicdate,iscrawler)" \
+                " values(%s,%s,%s,%s,%s,%s,%s)"
     querySql = "select count(id) from webcrawlerfilelist where articleurl=(%s)"
     for temp in articles24LoadedListSorted:
-        cur.execute(querySql,(temp['url']))
+        articleLocalDir = articleStoreLocalDir + temp['articleId'] + ".html" if "articleContent" in temp else ""
+        cur.execute(querySql,(temp['articleUrl']))
         queryResultRowNum =cur.fetchone()[0]
         if not queryResultRowNum:
-            cur.execute(insertSql, (temp['url'],articleStoreLocalDir+temp['id']+".html"))
+            cur.execute(
+                insertSql,
+                (temp['articleId'],temp['articleUrl'],articleLocalDir,temp['articleTitle'],temp['articleAuthor'],temp['articlePublicDate'],temp['isCrawler'])
+            )
     # 进行提交，批量插入数据，没有提交的话，无法完成插入
     mysqlConn.commit()
 
 def analyseNewArticles(articleStoreDir,sess,websiteurl):
     """
-        查看是否有新的文章,如果有新文章就返回Ture，如果没有新的文章就返回False
+        查看是否有新的文章,如果有新文章就返回[{"id":id的值，"htmltext":"文章html的内容"}]，如果没有新的文章就返回False
         :param printArticleJson:
         :return:
     """
     printArticleInfo = getPrintArticlesJsonData(sess,websiteurl) #得到全部PrintArticles信息
     printArticleInfo = json.loads(printArticleInfo.content).get('xjxobj')
 
-    readerPaneHtml = ''                           #得到{cmd: "as", id: "reader_pane", prop: "innerHTML",…} 这一项的信息
     articlesLoadedHtml = ''                       #得到{cmd: "jc", func: "articles_loaded",…} 这一项的信息
 
     for tempNum in range(len(printArticleInfo)) :
-        if articlesLoadedHtml != '' and readerPaneHtml != '' :
+        if articlesLoadedHtml != '':
             break
         if 'func' in printArticleInfo[tempNum] :
             if 'check_older_articles_hint' == printArticleInfo[tempNum]['func'] :  #如果有这个方法名，则表明所有的频道下面没有最新的文章
                 return False
             if 'articles_loaded' == printArticleInfo[tempNum]['func'] :
                 articlesLoadedHtml = printArticleInfo[tempNum]['data']
-
-        if "id" in printArticleInfo[tempNum] :
-            if 'as' == printArticleInfo[tempNum]['cmd'] and 'reader_pane' == printArticleInfo[tempNum]['id'] :
-                readerPaneHtml = printArticleInfo[tempNum]['data']
-
-    readerPanelList = analyseReaderPanel(readerPaneHtml,websiteurl) #返回[{id:文章的url},{id:文章的url},.....]的形式
-    articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml) #返回[{"id":id的值，"htmltext":"文章html的内容"}, {"id":id的值，"htmltext":"文章html的内容"},.....]的形式
-
-    readerPanelListSorted = sorted(readerPanelList, key=itemgetter('id'), reverse=True)
-    articlesLoadedListSorted = sorted(articlesLoadedList, key=itemgetter('id'), reverse=True)
-
-    for tempNum in range(len(articlesLoadedListSorted)) : #把文章的url加入到articlesLoadedListSorted里面去
-       articlesLoadedListSorted[tempNum].update({"url":readerPanelListSorted[tempNum]['url']})
-
-    return articlesLoadedListSorted
+    articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml)
+    articlesLoadedList = getArticleContent(articlesLoadedList);
+    return articlesLoadedList
 
 """
     ###################AnalyseArticle####存的下需要的函数###############################################
@@ -244,14 +249,13 @@ def queryAnalyseData(mysqlConn):
     cursor = mysqlConn.cursor()
 
     # SQL 查询语句
-    sql = "select id,articleurl,articledir,updatedate from webcrawlerfilelist where articleflag=-3"
+    sql = "select id,articleurl,articledir,updatedate,articletitle,articleauthor,publicdate,iscrawler from webcrawlerfilelist where articleflag=-3"
     usersvalues = []
     try:
        # 执行SQL语句
        cursor.execute(sql)
        # 获取所有记录列表
        results = cursor.fetchall()
-
        #把results这些数据的articleflag=-2表明它正在处理
        for temp in range(0, len(results)):
            usersvalues.append((-2, results[temp][0]))
@@ -283,34 +287,36 @@ def analyseArticleDate(fetchAll):
     dataList = [];
     insertTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     for row in fetchAll:
-        id = row[0]
         articleurl = row[1]
         articledir = row[2]
-        singleMap = analyseSingleArticle(articledir,articleurl,id,insertTime)
+        articletitle = row[4]
+        articleauthor = row[5]
+        publicdate = row[6]
+        iscrawler = row[7]
+        finalEsContent = analyseSingleArticle(articledir,iscrawler)
+        singleMap = {"title": articletitle, "author": articleauthor,
+                     "url": articleurl, "articledir": articledir,
+                     "publicDate": publicdate, "insertDate": insertTime,
+                     "analyseFlag": "false", "content": finalEsContent,"iscrawler":iscrawler}
         dataList.append(singleMap)
     return dataList
 
 
-def analyseSingleArticle(articledir,articleurl,id,insertTime):
+def analyseSingleArticle(articledir,iscrawler):
     """
-        分析一篇文章的内容，分析出 id,title,content,url,
-        :param articledir: 传入该篇文章的本地存储目录
-        :return: 
-    """""
-    f = open(articledir, "r", encoding="utf-8")
-    articleContent = f.read()
-    soup = BeautifulSoup(articleContent, 'lxml')
-    # 文章的id
-    title = soup.select(".article_title_link")[0].text.strip()
-    publicDate = analyseSingleArticlePublicDate(soup)
-    content = soup.find("div", attrs={"class": "article_content"}).text
-    #解析作者
-    author = analyseSingleArticleAuthor(soup)
-
-    singleMap = {"title": title,"author": author,"url": articleurl,"articledir": articledir,"publicDate": publicDate,"insertDate": insertTime,
-                 "analyseFlag": "false","content": content}
-
-    return singleMap
+          分析一篇文章的内容，这里只分析文章的内容
+          :param articledir: 传入该篇文章的本地存储目录,爬虫标识
+          :return:
+    """
+    finalEsContent = ""
+    if iscrawler == 1:
+        f = open(articledir, "r", encoding="utf-8")
+        articleContent = f.read()
+        soup = BeautifulSoup(articleContent)
+        [s.extract() for s in soup(["script", "img", "style", "input"])]   #去除这些指定的标签，因为对于文章内容来说这些是没有用的
+        for child in soup.find_all('body'):
+            finalEsContent += str(child)
+    return finalEsContent
 
 def importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type):
     actions = [
@@ -389,3 +395,22 @@ def deleteLocalDirArticle():
     removeDir = localFileDir+str(beforeThreeDay)
     if os.path.exists(removeDir):
         shutil.rmtree(removeDir)
+
+def getArticleContent(articlesLoadedList):
+    """
+    该方法是取得每篇文章的文章内容
+    :param articlesLoadedList: 这个是一个列表list<dict>
+    :return:
+    """
+    for temp in articlesLoadedList:
+        articleUrl = temp["articleUrl"]
+        try:
+            response = requests.get(articleUrl, timeout=12)
+            if response.status_code == 200:
+                temp["isCrawler"] = 1
+                temp["articleContent"] = response.text
+            else:
+                temp["isCrawler"] = 2
+        except Exception:
+            temp["isCrawler"] = 3
+    return articlesLoadedList
