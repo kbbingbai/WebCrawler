@@ -52,16 +52,14 @@ if __name__ == "__main__":
             #创建session并初始化cookie
             sess = requests.session()
             sess.cookies = CookieJar()
-
             logger.info("=====用户名为：%s 开始抓取文章=====",user[0])
-
             logger.info("=====开始构建 BuiltTreeJsonData=====")
             treeBuiltJsonDataRes = getBuiltTreeJsonData(sess,user[0],user[1],user[2])
             isSubscribe = analyseTreeBuiltJsonData(treeBuiltJsonDataRes)
 
             if isSubscribe == True : # 订阅了频道，但是有可能订阅了频道但是没有新的文章，也有可能订阅了频道有新的文章
                 #得到24篇文章[{字段：字段值}]
-                articles24LoadedListSorted = analyseNewArticles(articleStoreDir,sess,user[2])
+                articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0])
                 while articles24LoadedListSorted :
                     logger.info("=====得到了%d篇文章=====",len(articles24LoadedListSorted))
                     # 把文章保存到本地目录
@@ -71,10 +69,13 @@ if __name__ == "__main__":
                     # 取消文章的订阅
                     unsubscribeArticles(articles24LoadedListSorted,sess,user[2])
                     #再次执行上面的程序
-                    articles24LoadedListSorted = analyseNewArticles(articleStoreDir,sess,user[2])
-
+                    articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0])
             sess.close()
             logger.info("=====用户名为：%s 结束抓取文章=====", user[0])
+
+        logger.info("=====开始爬取可疑数据=====")
+        retryCrawler(mysqlConn,articleStoreLocalDir)
+        logger.info("=====结束爬取可疑数据=====")
     #关闭数据库的连接
     mysqlConn.close()
     logger.info("=====CrawlArticle结束=====")

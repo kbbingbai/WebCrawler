@@ -137,7 +137,7 @@ def  analyseReaderPanel(printArticlesHtml,websiteurl) :
     return listTotal
 
 
-def analyseArticlesLoaded(articlesLoadedHtml) :
+def analyseArticlesLoaded(articlesLoadedHtml,username) :
     """
         用于解析文章,它的解析
         得到文章的url信息和文章的id, 把它组成一个list, 组成一个[{"id":id的值，"htmltext":"文章html的内容"}, {"id":id的值，"htmltext":"文章html的内容"},.....]
@@ -154,6 +154,7 @@ def analyseArticlesLoaded(articlesLoadedHtml) :
         articleTitle = soup.select(".article_title_link")[0].text.strip()
         articlePublicDate = analyseSingleArticlePublicDate(soup)
         articleAuthor = analyseSingleArticleAuthor(soup)
+        articleChannel = analyseSingleArticleChannel(soup)
         articleId = str(uuid.uuid1())
         singleMap = {
             "articleUrl":articleUrl,
@@ -161,6 +162,8 @@ def analyseArticlesLoaded(articlesLoadedHtml) :
             "articlePublicDate":articlePublicDate,
             "articleAuthor":articleAuthor,
             "articleId":articleId,
+            "username":username,
+            "articlechannel":articleChannel,
             "id":id
         }
         listTotal.append(singleMap)
@@ -183,8 +186,8 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
         把数据插入到mysql数据库中，这个是方法验证了数据的重复性
     """
     cur = mysqlConn.cursor();
-    insertSql = "insert into webcrawlerfilelist(id,articleurl,articledir,articletitle,articleauthor,publicdate,iscrawler)" \
-                " values(%s,%s,%s,%s,%s,%s,%s)"
+    insertSql = "insert into webcrawlerfilelist(id,articleurl,articledir,articletitle,articleauthor,publicdate,iscrawler,username,articlechannel)" \
+                " values(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
     querySql = "select count(id) from webcrawlerfilelist where articleurl=(%s)"
     for temp in articles24LoadedListSorted:
         articleLocalDir = articleStoreLocalDir + temp['articleId'] + ".html" if "articleContent" in temp else ""
@@ -193,12 +196,13 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
         if not queryResultRowNum:
             cur.execute(
                 insertSql,
-                (temp['articleId'],temp['articleUrl'],articleLocalDir,temp['articleTitle'],temp['articleAuthor'],temp['articlePublicDate'],temp['isCrawler'])
+                (temp['articleId'],temp['articleUrl'],articleLocalDir,temp['articleTitle'],
+                 temp['articleAuthor'],temp['articlePublicDate'],temp['isCrawler'],temp['username'],temp['articlechannel'])
             )
     # 进行提交，批量插入数据，没有提交的话，无法完成插入
     mysqlConn.commit()
 
-def analyseNewArticles(articleStoreDir,sess,websiteurl):
+def analyseNewArticles(sess,websiteurl,username):
     """
         查看是否有新的文章,如果有新文章就返回[{"id":id的值，"htmltext":"文章html的内容"}]，如果没有新的文章就返回False
         :param printArticleJson:
@@ -217,7 +221,7 @@ def analyseNewArticles(articleStoreDir,sess,websiteurl):
                 return False
             if 'articles_loaded' == printArticleInfo[tempNum]['func'] :
                 articlesLoadedHtml = printArticleInfo[tempNum]['data']
-    articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml)
+    articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml,username)
     articlesLoadedList = getArticleContent(articlesLoadedList);
     return articlesLoadedList
 
@@ -291,14 +295,15 @@ def analyseArticleDate(fetchAll):
         articledir = row[2]
         articletitle = row[4]
         articleauthor = row[5]
-        publicdate = row[6]
+        publicdate = str(row[6])
         iscrawler = row[7]
         finalEsContent = analyseSingleArticle(articledir,iscrawler)
-        singleMap = {"title": articletitle, "author": articleauthor,
-                     "url": articleurl, "articledir": articledir,
-                     "publicDate": publicdate, "insertDate": insertTime,
-                     "analyseFlag": "false", "content": finalEsContent,"iscrawler":iscrawler}
-        dataList.append(singleMap)
+        if finalEsContent:
+            singleMap = {"title": articletitle, "author": articleauthor,
+                         "url": articleurl, "articledir": articledir,
+                         "publicDate": publicdate, "insertDate": insertTime,
+                         "analyseFlag": "false", "content": finalEsContent,"iscrawler":iscrawler}
+            dataList.append(singleMap)
     return dataList
 
 
@@ -402,10 +407,13 @@ def getArticleContent(articlesLoadedList):
     :param articlesLoadedList: 这个是一个列表list<dict>
     :return:
     """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.137 Safari/537.36 LBBROWSER'
+    }
     for temp in articlesLoadedList:
         articleUrl = temp["articleUrl"]
         try:
-            response = requests.get(articleUrl, timeout=12)
+            response = requests.get(articleUrl,timeout=80,headers=headers)
             if response.status_code == 200:
                 temp["isCrawler"] = 1
                 temp["articleContent"] = response.text
@@ -414,3 +422,73 @@ def getArticleContent(articlesLoadedList):
         except Exception:
             temp["isCrawler"] = 3
     return articlesLoadedList
+
+def analyseSingleArticleChannel(soup):
+    """
+    分析一篇文章的频道
+    :param soup:
+    :return:
+    """
+    channel = ""
+    tag = soup.find("a", attrs={"class": "boldlink boldlink ajaxed"})
+    if tag:
+        channel = tag.text
+    return channel
+
+def retryCrawler(mysqlConn,articleStoreLocalDir):
+    """
+    对于初次不能爬取的文章，我们再去尝试去爬取
+    :param mysqlConn:
+    :param articleStoreLocalDir:
+    :return:
+    """
+    querySql = "select id,articleurl,iscrawler from " \
+          "(select id,articleurl,count(*) as articlecount,iscrawler from webcrawlerfilelist group by articlechannel ) temp where articlecount=1 and iscrawler=3 " \
+          "union " \
+           "select id,articleurl,iscrawler from webcrawlerfilelist where articlechannel in(select articlechannel from " \
+          "(select channelcount,articlechannel from (select count(*) channelcount,articlechannel from " \
+          "(select articlechannel from webcrawlerfilelist where iscrawler in(1,3) group by articlechannel,iscrawler)" \
+          " temp group by articlechannel) temp2 where channelcount>1) temp3) and iscrawler=3"
+    cur = mysqlConn.cursor()
+    cur.execute(querySql)
+    results = cur.fetchall()
+
+    retryList = tupleToList(results)#tuple转成list
+    retryList = getArticleContent(retryList)#再次去请求网络
+    retryUpdateArticleContent(mysqlConn,retryList,articleStoreLocalDir)#更新本地文件和数据库
+
+
+def tupleToList(result):
+    """
+    把tuple<tuple> 转换成list<dict>
+    :param result:
+    :return:
+    """
+    list = []
+    for temp in result:
+        single = {
+            "id":temp[0],
+            "articleUrl":temp[1],
+            "isCrawler":temp[2]
+        }
+        list.append(single)
+    return list
+
+def retryUpdateArticleContent(mysqlConn,retryList,articleStoreLocalDir):
+    """
+    更新再次请求的数据
+    :param retryList:
+    :return:
+    """
+    cur = mysqlConn.cursor()
+    updateSql = "update webcrawlerfilelist set articledir=%s,iscrawler=%s where id=%s"
+    for temp in retryList:
+        if "articleContent" in temp:
+            #把文章内容写入文件
+            localdir = articleStoreLocalDir + temp["id"] + ".html"
+            f = open(localdir, "w", encoding="utf-8")
+            f.write(str(temp['articleContent']))
+            f.close()
+            #更新数据库
+            cur.execute(updateSql,(localdir, temp['isCrawler'], temp['id']))
+    mysqlConn.commit()

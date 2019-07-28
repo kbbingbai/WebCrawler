@@ -52,9 +52,3 @@ if __name__ == "__main__" :
     mysqlConn.close()
 
     logger.info("=====AnalyseArticle结束=====")
-
-
-
-
-
-

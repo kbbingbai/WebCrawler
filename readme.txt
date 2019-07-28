@@ -25,3 +25,43 @@ r = requests.get(url, headers=headers)
         }
  response = requests.get(results[temp][0],timeout=10, headers=headers)
  ------------------------------
+SELECT *
+FROM webcrawlerfilelist
+WHERE articlechannel in
+    (SELECT articlechannel
+    FROM
+        (SELECT channelcount,
+        id,
+        articleurl,
+        articlechannel
+        FROM
+            (SELECT count(*) channelcount,
+        id,
+        articleurl,
+        articlechannel
+            FROM
+                (SELECT id,
+        articleurl,
+        articlechannel
+                FROM webcrawlerfilelist
+                WHERE iscrawler in(1,3)
+                GROUP BY  articlechannel,iscrawler) temp
+                GROUP BY  articlechannel) temp2
+                WHERE channelcount>1) temp3)
+                    AND iscrawler=3
+
+
+
+SELECT *
+FROM
+    (SELECT id,
+        articleurl,
+        count(*) AS articlecount,
+        iscrawler,
+        articlechannel
+    FROM webcrawlerfilelist
+    GROUP BY  articlechannel ) temp
+WHERE articlecount=1
+        AND iscrawler=3
+
+---------------------------------------------------------
