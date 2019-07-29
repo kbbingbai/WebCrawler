@@ -202,7 +202,7 @@ def storeFileToMysqlVerifyDuplicate(articles24LoadedListSorted,articleStoreLocal
     # 进行提交，批量插入数据，没有提交的话，无法完成插入
     mysqlConn.commit()
 
-def analyseNewArticles(sess,websiteurl,username):
+def analyseNewArticles(sess,websiteurl,username,mysqlConn):
     """
         查看是否有新的文章,如果有新文章就返回[{"id":id的值，"htmltext":"文章html的内容"}]，如果没有新的文章就返回False
         :param printArticleJson:
@@ -222,7 +222,7 @@ def analyseNewArticles(sess,websiteurl,username):
             if 'articles_loaded' == printArticleInfo[tempNum]['func'] :
                 articlesLoadedHtml = printArticleInfo[tempNum]['data']
     articlesLoadedList = analyseArticlesLoaded(articlesLoadedHtml,username)
-    articlesLoadedList = getArticleContent(articlesLoadedList);
+    articlesLoadedList = getArticleContent(articlesLoadedList,mysqlConn);
     return articlesLoadedList
 
 """
@@ -298,7 +298,7 @@ def analyseArticleDate(fetchAll):
         publicdate = str(row[6])
         iscrawler = row[7]
         finalEsContent = analyseSingleArticle(articledir,iscrawler)
-        if finalEsContent:
+        if iscrawler != 4:
             singleMap = {"title": articletitle, "author": articleauthor,
                          "url": articleurl, "articledir": articledir,
                          "publicDate": publicdate, "insertDate": insertTime,
@@ -321,6 +321,7 @@ def analyseSingleArticle(articledir,iscrawler):
         [s.extract() for s in soup(["script", "img", "style", "input"])]   #去除这些指定的标签，因为对于文章内容来说这些是没有用的
         for child in soup.find_all('body'):
             finalEsContent += str(child)
+        f.close()
     return finalEsContent
 
 def importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type):
@@ -401,24 +402,34 @@ def deleteLocalDirArticle():
     if os.path.exists(removeDir):
         shutil.rmtree(removeDir)
 
-def getArticleContent(articlesLoadedList):
+def getArticleContent(articlesLoadedList,mysqlConn):
     """
-    该方法是取得每篇文章的文章内容
-    :param articlesLoadedList: 这个是一个列表list<dict>
-    :return:
+        该方法是取得每篇文章的文章内容
+        :param articlesLoadedList: 这个是一个列表list<dict>
+        :return:
     """
+
+    #开启文章的过滤，如果是特定频道（不能抓取的频道，就不让它尝试抓取了）
+    excludeChannel = getExcludeChannel(mysqlConn)
+    #开启文章的过滤
+
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.137 Safari/537.36 LBBROWSER'
     }
     for temp in articlesLoadedList:
         articleUrl = temp["articleUrl"]
+        articlechannel = temp["articlechannel"].strip()
         try:
-            response = requests.get(articleUrl,timeout=80,headers=headers)
-            if response.status_code == 200:
-                temp["isCrawler"] = 1
-                temp["articleContent"] = response.text
+            if articlechannel not in excludeChannel:
+                response = requests.get(articleUrl,timeout=80,headers=headers)
+                if response.status_code == 200:
+                    temp["isCrawler"] = 1
+                    temp["articleContent"] = response.text
+                else:
+                    temp["isCrawler"] = 2
             else:
-                temp["isCrawler"] = 2
+                temp["isCrawler"] = 4
         except Exception:
             temp["isCrawler"] = 3
     return articlesLoadedList
@@ -442,19 +453,13 @@ def retryCrawler(mysqlConn,articleStoreLocalDir):
     :param articleStoreLocalDir:
     :return:
     """
-    querySql = "select id,articleurl,iscrawler from " \
-          "(select id,articleurl,count(*) as articlecount,iscrawler from webcrawlerfilelist group by articlechannel ) temp where articlecount=1 and iscrawler=3 " \
-          "union " \
-           "select id,articleurl,iscrawler from webcrawlerfilelist where articlechannel in(select articlechannel from " \
-          "(select channelcount,articlechannel from (select count(*) channelcount,articlechannel from " \
-          "(select articlechannel from webcrawlerfilelist where iscrawler in(1,3) group by articlechannel,iscrawler)" \
-          " temp group by articlechannel) temp2 where channelcount>1) temp3) and iscrawler=3"
+    querySql = "select id,articleurl,iscrawler,articlechannel from webcrawlerfilelist where iscrawler in (2,3) and articleflag=-3"
     cur = mysqlConn.cursor()
     cur.execute(querySql)
     results = cur.fetchall()
 
     retryList = tupleToList(results)#tuple转成list
-    retryList = getArticleContent(retryList)#再次去请求网络
+    retryList = getArticleContent(retryList,mysqlConn)#再次去请求网络
     retryUpdateArticleContent(mysqlConn,retryList,articleStoreLocalDir)#更新本地文件和数据库
 
 
@@ -469,7 +474,8 @@ def tupleToList(result):
         single = {
             "id":temp[0],
             "articleUrl":temp[1],
-            "isCrawler":temp[2]
+            "isCrawler":temp[2],
+            "articlechannel":temp[3]
         }
         list.append(single)
     return list
@@ -492,3 +498,22 @@ def retryUpdateArticleContent(mysqlConn,retryList,articleStoreLocalDir):
             #更新数据库
             cur.execute(updateSql,(localdir, temp['isCrawler'], temp['id']))
     mysqlConn.commit()
+
+
+def getExcludeChannel(mysqlConn):
+    """
+    查询常见的不能抓取的频道名称
+    :param mysqlConn:
+    :return:
+    """
+    sql = "select channelname from excludechannel"
+    # 执行SQL语句
+    cursor = mysqlConn.cursor()
+    cursor.execute(sql)
+    # 获取所有记录列表
+    results = cursor.fetchall()
+    #把元组转成list
+    resultList = []
+    for temp in results:
+        resultList.append(temp[0])
+    return resultList;

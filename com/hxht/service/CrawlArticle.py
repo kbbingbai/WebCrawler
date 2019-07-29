@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
             if isSubscribe == True : # 订阅了频道，但是有可能订阅了频道但是没有新的文章，也有可能订阅了频道有新的文章
                 #得到24篇文章[{字段：字段值}]
-                articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0])
+                articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0],mysqlConn)
                 while articles24LoadedListSorted :
                     logger.info("=====得到了%d篇文章=====",len(articles24LoadedListSorted))
                     # 把文章保存到本地目录
@@ -69,7 +69,7 @@ if __name__ == "__main__":
                     # 取消文章的订阅
                     unsubscribeArticles(articles24LoadedListSorted,sess,user[2])
                     #再次执行上面的程序
-                    articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0])
+                    articles24LoadedListSorted = analyseNewArticles(sess,user[2],user[0],mysqlConn)
             sess.close()
             logger.info("=====用户名为：%s 结束抓取文章=====", user[0])
 
