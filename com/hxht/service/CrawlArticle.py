@@ -27,7 +27,7 @@ if __name__ == "__main__":
     # 执行该程序，不管订阅的频道下面有多少未读文章也不管，也不管执行该段程序跨天不跨天，读取的文章就保存在该文件夹下
     articleStoreDir = time.strftime('%Y-%m-%d', time.localtime(time.time()));
     # 查看本地目录存在不存在，如果不存在，就创建，如果存在就不用处理了
-    articleStoreLocalDir = createArticleStoreLocalDir(articleStoreDir);
+    articleStoreLocalDir = createArticleStoreLocalDir(articleStoreDir)
     logger.info("=====html存储的本地文目录为%s=====",articleStoreLocalDir)
 
     # 创建一个mysql的连接对象

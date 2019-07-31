@@ -318,7 +318,7 @@ def analyseSingleArticle(articledir,iscrawler):
         f = open(articledir, "r", encoding="utf-8")
         articleContent = f.read()
         soup = BeautifulSoup(articleContent)
-        [s.extract() for s in soup(["script", "img", "style", "input"])]   #去除这些指定的标签，因为对于文章内容来说这些是没有用的
+        [s.extract() for s in soup(["script", "img", "style", "input","svg"])]   #去除这些指定的标签，因为对于文章内容来说这些是没有用的
         for child in soup.find_all('body'):
             finalEsContent += str(child)
         f.close()
@@ -385,7 +385,7 @@ def deleteMysqlArticle(mysqlConn):
     :return:
     """
     cur = mysqlConn.cursor();
-    beforeThreeDay = datetime.date.today() + datetime.timedelta(-2)
+    beforeThreeDay = datetime.date.today() + datetime.timedelta(-6)
     sql = 'delete from webcrawlerfilelist where updatedate < STR_TO_DATE(%s,%s) and articleflag = %s'
     cur.execute(sql,[beforeThreeDay,'%Y-%m-%d',-1])
     mysqlConn.commit()
@@ -395,7 +395,7 @@ def deleteLocalDirArticle():
     每天删除本地存储文件当中三天前数据
     :return:
     """
-    beforeThreeDay = datetime.date.today() + datetime.timedelta(-3)
+    beforeThreeDay = datetime.date.today() + datetime.timedelta(-7)
     cf = readConfig("requestHeader.ini", False)
     localFileDir = cf.get("article-storelocaldir", "articlestorelocaldir")
     removeDir = localFileDir+str(beforeThreeDay)
@@ -517,3 +517,79 @@ def getExcludeChannel(mysqlConn):
     for temp in results:
         resultList.append(temp[0])
     return resultList;
+
+def createEsIndex(esConn,es_index,es_type):
+    """
+    创建es索引
+    :param esConn:
+    :param es_index:
+    :param es_type:
+    :return:
+    """
+    CREATE_BODY = {
+        "settings": {
+            "number_of_shards": 5,
+            "number_of_replicas": 1
+        },
+        "mappings": {
+            es_type: {
+                "properties": {
+                    "analyseFlag": {
+                        "type": "keyword"
+                    },
+                    "articledir": {
+                        "type": "keyword"
+                    },
+                    "author": {
+                        "type": "text",
+                        "analyzer": "ik_max_word",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "content": {
+                        "type": "text",
+                        "analyzer": "ik_max_word",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 80000
+                            }
+                        }
+                    },
+                    "insertDate": {
+                        "type": "keyword"
+                    },
+                    "iscrawler": {
+                        "type": "long"
+                    },
+                    "publicDate": {
+                        "type": "keyword"
+                    },
+                    "title": {
+                        "type": "text",
+                        "analyzer": "ik_max_word",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 500
+                            }
+                        }
+                    },
+                    "url": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 500
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    esConn.indices.create(index=es_index, body=CREATE_BODY)

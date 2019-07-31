@@ -44,10 +44,14 @@ if __name__ == "__main__" :
     #数据的解析
     articleListData = analyseArticleDate(fetchAll)
 
-    logger.info("=====录入到es格式化后的数据=====")
-    #入es数据
-    importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type)
+    #创建es索引
+    logger.info("=====创建es索引=====")
+    createEsIndex(esConn,es_index,es_type)
 
+    #入es数据
+    logger.info("=====开始录入到es格式化后的数据=====")
+    importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type)
+    logger.info("=====结束录入到es格式化后的数据=====")
     #关闭相应的连接
     mysqlConn.close()
 
