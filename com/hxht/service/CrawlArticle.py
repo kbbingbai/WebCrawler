@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # 删除mysql中三天前的数据
     deleteMysqlArticle(mysqlConn)
-    logger.info("=====成功删除mysql中三天前的数据=====")
+    logger.info("=====成功删除mysql中七天前的数据=====")
 
     # 删除本地文件目录
     deleteLocalDirArticle()
@@ -73,9 +73,9 @@ if __name__ == "__main__":
             sess.close()
             logger.info("=====用户名为：%s 结束抓取文章=====", user[0])
 
-        logger.info("=====开始爬取可疑数据=====")
-        retryCrawler(mysqlConn,articleStoreLocalDir)
-        logger.info("=====结束爬取可疑数据=====")
+        # logger.info("=====开始爬取可疑数据=====")
+        # retryCrawler(mysqlConn,articleStoreLocalDir)
+        # logger.info("=====结束爬取可疑数据=====")
     #关闭数据库的连接
     mysqlConn.close()
     logger.info("=====CrawlArticle结束=====")

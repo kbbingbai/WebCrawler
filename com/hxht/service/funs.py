@@ -298,7 +298,7 @@ def analyseArticleDate(fetchAll):
         publicdate = str(row[6])
         iscrawler = row[7]
         finalEsContent = analyseSingleArticle(articledir,iscrawler)
-        if iscrawler != 4:
+        if iscrawler == 1:
             singleMap = {"title": articletitle, "author": articleauthor,
                          "url": articleurl, "articledir": articledir,
                          "publicDate": publicdate, "insertDate": insertTime,
@@ -317,10 +317,9 @@ def analyseSingleArticle(articledir,iscrawler):
     if iscrawler == 1:
         f = open(articledir, "r", encoding="utf-8")
         articleContent = f.read()
-        soup = BeautifulSoup(articleContent)
-        [s.extract() for s in soup(["script", "img", "style", "input","svg"])]   #去除这些指定的标签，因为对于文章内容来说这些是没有用的
-        for child in soup.find_all('body'):
-            finalEsContent += str(child)
+        soup = BeautifulSoup(articleContent,"html5lib")
+        [s.extract() for s in soup(["script", "style", "svg"])]  # 去除这些指定的标签，因为对于文章内容来说这些是没有用的
+        finalEsContent += "".join([s for s in soup.get_text().splitlines(True) if s.strip()])
         f.close()
     return finalEsContent
 
@@ -333,8 +332,12 @@ def importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type):
         }
         for d in articleListData
     ]
+
     # 批量插入
-    helpers.bulk(esConn, actions)
+    try:
+        helpers.bulk(esConn, actions)
+    except Exception as e:
+        print(e.args)
 
     # 把results这些数据的articleflag=-1表明它正在处理
     usersvalues = []
@@ -410,28 +413,24 @@ def getArticleContent(articlesLoadedList,mysqlConn):
     """
 
     #开启文章的过滤，如果是特定频道（不能抓取的频道，就不让它尝试抓取了）
-    excludeChannel = getExcludeChannel(mysqlConn)
+    #excludeChannel = getExcludeChannel(mysqlConn)
+
     #开启文章的过滤
-
-
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.137 Safari/537.36 LBBROWSER'
     }
     for temp in articlesLoadedList:
         articleUrl = temp["articleUrl"]
-        articlechannel = temp["articlechannel"].strip()
         try:
-            if articlechannel not in excludeChannel:
-                response = requests.get(articleUrl,timeout=80,headers=headers)
-                if response.status_code == 200:
-                    temp["isCrawler"] = 1
-                    temp["articleContent"] = response.text
-                else:
-                    temp["isCrawler"] = 2
+            response = requests.get(articleUrl,timeout=80,headers=headers)
+            if response.status_code == 200:
+                temp["isCrawler"] = 1
+                temp["articleContent"] = response.text
             else:
-                temp["isCrawler"] = 4
+                temp["isCrawler"] = 2
         except Exception:
             temp["isCrawler"] = 3
+
     return articlesLoadedList
 
 def analyseSingleArticleChannel(soup):
@@ -552,13 +551,7 @@ def createEsIndex(esConn,es_index,es_type):
                     },
                     "content": {
                         "type": "text",
-                        "analyzer": "ik_max_word",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                                "ignore_above": 80000
-                            }
-                        }
+                        "analyzer": "ik_max_word"
                     },
                     "insertDate": {
                         "type": "keyword"
@@ -593,3 +586,43 @@ def createEsIndex(esConn,es_index,es_type):
         }
     }
     esConn.indices.create(index=es_index, body=CREATE_BODY)
+
+def addChannelData(mysqlConn):
+    """
+    向频道表中插入数据
+    :param mysqlConn: mysql连接
+    :return:
+    """
+    reg = "(http|https)://[^\s]*?/" #提取到三级域
+    cursor = mysqlConn.cursor()
+    # 存放当天的数据
+    currdayList = []
+    # 数据库中所有的数据
+    databaseList = []
+    # 新增数据
+    insertData = []
+    # 从当天的数据当中筛选url,只查找能拉取下来的数据
+    articleStoreDir = time.strftime('%Y-%m-%d', time.localtime(time.time()));
+    queryStr = "select articleurl from webcrawlerfilelist where DATE_FORMAT(updatedate,'%Y-%m-%d')='" + articleStoreDir + "' and iscrawler=1"
+    insertSql = "insert into channellist(channelurl) values(%s)"
+    cursor.execute(queryStr)
+    currdayresults = cursor.fetchall()
+    if currdayresults:
+        for temp in currdayresults:
+            url = re.match(reg, temp[0]).group()
+            currdayList.append(url)
+        currdayList = list(set(currdayList))  # 对list数据进行去重
+    # 从channellist表当中查询出所有的数据
+    queryStr = "select channelurl from channellist"
+    cursor.execute(queryStr)
+    databaseresults = cursor.fetchall()
+    if databaseresults:
+        for temp in databaseresults:
+            databaseList.append(temp[0])
+
+    # 插入数据
+    if currdayList:
+        for temp in currdayList:
+            if temp not in databaseList:
+                cursor.execute(insertSql, (temp))
+        mysqlConn.commit()

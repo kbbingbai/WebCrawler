@@ -15,7 +15,6 @@ from funs import *
 
 if __name__ == "__main__" :
 
-
     # log对象
     logger = createLog()
     logger.info("=====AnalyseArticle开始=====")
@@ -28,7 +27,7 @@ if __name__ == "__main__" :
     #准备es索引
     indexPrefix = config.getValueByKey("es","index_prefix")
     es_type = config.getValueByKey("es", "type")
-    currentDate = time.strftime('%Y%m%d', time.localtime(time.time()));
+    currentDate = time.strftime('%Y%m%d', time.localtime(time.time()))
     es_index = indexPrefix+currentDate
 
     logger.info("=====连接elasticsearch成功=====")
@@ -44,15 +43,22 @@ if __name__ == "__main__" :
     #数据的解析
     articleListData = analyseArticleDate(fetchAll)
 
-    #创建es索引
-    logger.info("=====创建es索引=====")
-    createEsIndex(esConn,es_index,es_type)
+    # 如果有数据，就执行下面的操作
+    if articleListData:
+        # 创建es索引
+        logger.info("=====创建es索引=====")
+        createEsIndex(esConn,es_index,es_type)
 
-    #入es数据
-    logger.info("=====开始录入到es格式化后的数据=====")
-    importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type)
-    logger.info("=====结束录入到es格式化后的数据=====")
+        #入es数据
+        logger.info("=====开始录入到es格式化后的数据=====")
+        importDataToEs(esConn,articleListData,fetchAll,mysqlConn,es_index,es_type)
+        logger.info("=====结束录入到es格式化后的数据=====")
+
+        #向channellist添加站点
+        logger.info("=====开始添加频道数据=====")
+        addChannelData(mysqlConn)
+        logger.info("=====结束添加频道数据=====")
+
     #关闭相应的连接
     mysqlConn.close()
-
     logger.info("=====AnalyseArticle结束=====")

@@ -1,0 +1,381 @@
+dns_source_index_20190807
+
+{
+  "dns_source_index_20190807": {
+    "aliases": {},
+    "mappings": {
+      "dns_source_type": {
+        "properties": {
+          "analyseFlag": {
+            "type": "keyword"
+          },
+          "articledir": {
+            "type": "keyword"
+          },
+          "author": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            },
+            "analyzer": "ik_max_word"
+          },
+          "content": {
+            "type": "text",
+            "analyzer": "ik_max_word"
+          },
+          "insertDate": {
+            "type": "keyword"
+          },
+          "iscrawler": {
+            "type": "long"
+          },
+          "publicDate": {
+            "type": "keyword"
+          },
+          "title": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 500
+              }
+            },
+            "analyzer": "ik_max_word"
+          },
+          "url": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 500
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "index": {
+        "creation_date": "1565167387503",
+        "number_of_shards": "5",
+        "number_of_replicas": "1",
+        "uuid": "5QC3Nlw7ScOuNfWqKUHVdw",
+        "version": {
+          "created": "5060599"
+        },
+        "provided_name": "dns_source_index_20190807"
+      }
+    }
+  }
+}
+
+
+
+-------------------------------------------
+
+dnsindex
+
+{
+  "dnsindex": {
+    "aliases": {},
+    "mappings": {
+      "dnstype": {
+        "properties": {
+          "articleDir": {
+            "type": "keyword"
+          },
+          "author": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            },
+            "analyzer": "ik_max_word"
+          },
+          "content": {
+            "type": "text",
+            "analyzer": "ik_max_word"
+          },
+          "fitFlag": {
+            "type": "long"
+          },
+          "insertDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm"
+          },
+          "iscrawler": {
+            "type": "long"
+          },
+          "matchDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm"
+          },
+          "publicDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm"
+          },
+          "readFlag": {
+            "type": "long"
+          },
+          "tags": {
+            "properties": {
+              "catValue": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              },
+              "id": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              },
+              "subcatValue": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              },
+              "value": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              }
+            }
+          },
+          "title": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 500
+              }
+            },
+            "analyzer": "ik_max_word"
+          },
+          "url": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 500
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "index": {
+        "number_of_shards": "5",
+        "provided_name": "dnsindex",
+        "max_result_window": "100000",
+        "creation_date": "1565160156772",
+        "number_of_replicas": "1",
+        "uuid": "kZ1XNrm4TRSKTROL3BzEow",
+        "version": {
+          "created": "5060599"
+        }
+      }
+    }
+  }
+}
+
+
+webcrawler_keyword
+
+
+{
+  "webcrawler_keyword": {
+    "aliases": {},
+    "mappings": {
+      "type": {
+        "properties": {
+          "cDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss"
+          },
+          "catId": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "catValue": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "subcatId": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "subcatValue": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "value": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "index": {
+        "creation_date": "1563362732025",
+        "number_of_shards": "5",
+        "number_of_replicas": "1",
+        "uuid": "gAVt6gMTSTep4Tbn4MVtkA",
+        "version": {
+          "created": "5060599"
+        },
+        "provided_name": "webcrawler_keyword"
+      }
+    }
+  }
+}
+
+
+webcrawler_catgory
+
+
+{
+  "webcrawler_catgory": {
+    "aliases": {},
+    "mappings": {
+      "type": {
+        "properties": {
+          "cDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss"
+          },
+          "value": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "index": {
+        "creation_date": "1563362731746",
+        "number_of_shards": "5",
+        "number_of_replicas": "1",
+        "uuid": "j7BqIQGPRmiKDWKno2pK0Q",
+        "version": {
+          "created": "5060599"
+        },
+        "provided_name": "webcrawler_catgory"
+      }
+    }
+  }
+}
+
+
+
+webcrawler_subcatgory
+
+
+{
+  "webcrawler_subcatgory": {
+    "aliases": {},
+    "mappings": {
+      "type": {
+        "properties": {
+          "cDate": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss"
+          },
+          "catId": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "catValue": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "value": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings": {
+      "index": {
+        "creation_date": "1563362731895",
+        "number_of_shards": "5",
+        "number_of_replicas": "1",
+        "uuid": "QoXfWYu2RK69Oxa-twDcRQ",
+        "version": {
+          "created": "5060599"
+        },
+        "provided_name": "webcrawler_subcatgory"
+      }
+    }
+  }
+}
+
+
