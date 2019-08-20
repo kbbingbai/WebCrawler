@@ -425,7 +425,7 @@ def getArticleContent(articlesLoadedList,mysqlConn):
             response = requests.get(articleUrl,timeout=80,headers=headers)
             if response.status_code == 200:
                 temp["isCrawler"] = 1
-                temp["articleContent"] = response.text
+                temp["articleContent"] = response.content.decode("utf-8")
             else:
                 temp["isCrawler"] = 2
         except Exception:
@@ -525,67 +525,69 @@ def createEsIndex(esConn,es_index,es_type):
     :param es_type:
     :return:
     """
-    CREATE_BODY = {
-        "settings": {
-            "number_of_shards": 5,
-            "number_of_replicas": 1
-        },
-        "mappings": {
-            es_type: {
-                "properties": {
-                    "analyseFlag": {
-                        "type": "keyword"
-                    },
-                    "articledir": {
-                        "type": "keyword"
-                    },
-                    "author": {
-                        "type": "text",
-                        "analyzer": "ik_max_word",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                                "ignore_above": 256
+
+    if not esConn.indices.exists(index=es_index):
+        CREATE_BODY = {
+            "settings": {
+                "number_of_shards": 5,
+                "number_of_replicas": 1
+            },
+            "mappings": {
+                es_type: {
+                    "properties": {
+                        "analyseFlag": {
+                            "type": "keyword"
+                        },
+                        "articledir": {
+                            "type": "keyword"
+                        },
+                        "author": {
+                            "type": "text",
+                            "analyzer": "ik_max_word",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
                             }
-                        }
-                    },
-                    "content": {
-                        "type": "text",
-                        "analyzer": "ik_max_word"
-                    },
-                    "insertDate": {
-                        "type": "keyword"
-                    },
-                    "iscrawler": {
-                        "type": "long"
-                    },
-                    "publicDate": {
-                        "type": "keyword"
-                    },
-                    "title": {
-                        "type": "text",
-                        "analyzer": "ik_max_word",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                                "ignore_above": 500
+                        },
+                        "content": {
+                            "type": "text",
+                            "analyzer": "ik_max_word"
+                        },
+                        "insertDate": {
+                            "type": "keyword"
+                        },
+                        "iscrawler": {
+                            "type": "long"
+                        },
+                        "publicDate": {
+                            "type": "keyword"
+                        },
+                        "title": {
+                            "type": "text",
+                            "analyzer": "ik_max_word",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 500
+                                }
                             }
-                        }
-                    },
-                    "url": {
-                        "type": "text",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                                "ignore_above": 500
+                        },
+                        "url": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 500
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-    esConn.indices.create(index=es_index, body=CREATE_BODY)
+        esConn.indices.create(index=es_index, body=CREATE_BODY)
 
 def addChannelData(mysqlConn):
     """
